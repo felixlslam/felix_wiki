@@ -303,14 +303,6 @@ function MainLayout() {
             {loadingArticles && <CircularProgress color="inherit" size={20} />}
             <Button
               color="inherit"
-              startIcon={<AddIcon />}
-              onClick={handleNewPage}
-              sx={{ ml: 1 }}
-            >
-              New Page
-            </Button>
-            <Button
-              color="inherit"
               onClick={() => setNewSpaceDialogOpen(true)}
               sx={{ ml: 1 }}
             >
@@ -333,6 +325,7 @@ function MainLayout() {
               <PageTree 
                 articles={articles}
                 onNewSubpage={handleNewSubpage}
+                onNewRootPage={handleNewPage}
               />
             </Box>
           </nav>

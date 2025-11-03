@@ -9,7 +9,8 @@ import {
   Paper,
   Typography,
   Collapse,
-  Box
+  Box,
+  Button
 } from '@mui/material'
 import {
   ExpandMore as ExpandMoreIcon,
@@ -29,6 +30,7 @@ interface Article {
 interface PageTreeProps {
   articles: Article[]
   onNewSubpage?: (parentSlug: string) => void
+  onNewRootPage?: () => void
 }
 
 interface TreeNode {
@@ -172,7 +174,7 @@ function TreeNodeComponent({ node, level = 0, onNewSubpage, expanded = true, onT
   )
 }
 
-export default function PageTree({ articles, onNewSubpage }: PageTreeProps) {
+export default function PageTree({ articles, onNewSubpage, onNewRootPage }: PageTreeProps) {
   const tree = useMemo(() => buildTree(articles), [articles])
   const [expandedSlugs, setExpandedSlugs] = useState<Set<string>>(new Set())
   const nodeRefs = useRef(new Map<string, HTMLElement>())
@@ -223,20 +225,47 @@ export default function PageTree({ articles, onNewSubpage }: PageTreeProps) {
 
   if (articles.length === 0) {
     return (
-      <Box sx={{ py: 4, px: 2, textAlign: 'center' }}>
-        <Typography variant="body2" color="text.secondary">
-          No pages yet
-        </Typography>
-        <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1 }}>
-          Create your first page to get started
-        </Typography>
+      <Box>
+        <Box sx={{ px: 1, py: 1.5, borderBottom: 1, borderColor: 'divider' }}>
+          <Button
+            fullWidth
+            variant="outlined"
+            startIcon={<AddIcon />}
+            onClick={() => onNewRootPage?.()}
+            size="small"
+            sx={{ justifyContent: 'flex-start' }}
+          >
+            New Page
+          </Button>
+        </Box>
+        <Box sx={{ py: 4, px: 2, textAlign: 'center' }}>
+          <Typography variant="body2" color="text.secondary">
+            No pages yet
+          </Typography>
+          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1 }}>
+            Create your first page to get started
+          </Typography>
+        </Box>
       </Box>
     )
   }
 
   return (
-    <nav className="nav-tree">
-      <List disablePadding>
+    <>
+      <Box sx={{ px: 1, py: 1.5, borderBottom: 1, borderColor: 'divider' }}>
+        <Button
+          fullWidth
+          variant="outlined"
+          startIcon={<AddIcon />}
+          onClick={() => onNewRootPage?.()}
+          size="small"
+          sx={{ justifyContent: 'flex-start' }}
+        >
+          New Page
+        </Button>
+      </Box>
+      <nav className="nav-tree">
+        <List disablePadding>
         {Object.entries(tree.children)
           .sort(([,a], [,b]) => a.name.localeCompare(b.name))
           .map(([key, node]) => (
@@ -254,7 +283,8 @@ export default function PageTree({ articles, onNewSubpage }: PageTreeProps) {
               }}
             />
           ))}
-      </List>
-    </nav>
+        </List>
+      </nav>
+    </>
   )
 }
