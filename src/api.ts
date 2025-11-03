@@ -9,12 +9,24 @@ export interface Article {
   spaceId: number;
   createdAt: string;
   updatedAt: string;
+  currentVersion?: number;
+}
+
+export interface ArticleVersion {
+  id: number;
+  articleId: number;
+  version: number;
+  title: string;
+  bodyMarkdown: string;
+  createdAt: string;
+  restoredFrom?: number;
 }
 
 export interface Space {
   id: number;
   slug: string;
   name: string;
+  homePageSlug?: string | null;
   createdAt: string;
 }
 
@@ -80,6 +92,39 @@ export const articles = {
     const res = await fetch(`${API_BASE}/articles/search?${params.toString()}`);
     if (!res.ok) throw new Error('Failed to search articles');
     return res.json();
+  },
+
+  async searchAll(query: string, opts?: { limit?: number, offset?: number }): Promise<any> {
+    const params = new URLSearchParams();
+    params.set('q', query);
+    if (opts?.limit) params.set('limit', String(opts.limit));
+    if (opts?.offset) params.set('offset', String(opts.offset));
+    const res = await fetch(`${API_BASE}/articles/search-all?${params.toString()}`);
+    if (!res.ok) throw new Error('Failed to search');
+    return res.json();
+  },
+
+  // Version management
+  async getVersions(slug: string): Promise<ArticleVersion[]> {
+    const res = await fetch(`${API_BASE}/articles/${slug}/versions`);
+    if (!res.ok) throw new Error('Failed to fetch versions');
+    return res.json();
+  },
+
+  async getVersion(slug: string, versionId: number): Promise<ArticleVersion> {
+    const res = await fetch(`${API_BASE}/articles/${slug}/versions/${versionId}`);
+    if (!res.ok) throw new Error('Failed to fetch version');
+    return res.json();
+  },
+
+  async restoreVersion(slug: string, versionId: number): Promise<Article> {
+    const res = await fetch(`${API_BASE}/articles/${slug}/restore`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ versionId })
+    });
+    if (!res.ok) throw new Error('Failed to restore version');
+    return res.json();
   }
 };
 
@@ -107,7 +152,7 @@ export const spaces = {
     return res.json();
   },
 
-  async update(slug: string, space: { name: string }): Promise<Space> {
+  async update(slug: string, space: { name?: string; homePageSlug?: string | null }): Promise<Space> {
     const res = await fetch(`${API_BASE}/spaces/${slug}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },

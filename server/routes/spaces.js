@@ -34,10 +34,12 @@ router.post('/', (req, res) => {
 
 // Update space
 router.put('/:slug', (req, res) => {
-  const { name } = req.body;
-  if (!name) return res.status(400).json({ error: 'name required' });
+  const { name, homePageSlug } = req.body;
+  if (!name && homePageSlug === undefined) {
+    return res.status(400).json({ error: 'name or homePageSlug required' });
+  }
   
-  const space = db.updateSpace(req.params.slug, { name });
+  const space = db.updateSpace(req.params.slug, { name, homePageSlug });
   if (!space) return res.status(404).json({ error: 'Space not found' });
   
   res.json(space);
@@ -45,10 +47,6 @@ router.put('/:slug', (req, res) => {
 
 // Delete space
 router.delete('/:slug', (req, res) => {
-  if (req.params.slug === 'default') {
-    return res.status(400).json({ error: 'Cannot delete default space' });
-  }
-  
   const deleted = db.deleteSpace(req.params.slug);
   if (!deleted) return res.status(404).json({ error: 'Space not found' });
   

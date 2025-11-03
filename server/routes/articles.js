@@ -33,11 +33,49 @@ router.get('/search', (req, res) => {
   res.json({ q, total, limit, offset, results });
 });
 
+// Unified search (spaces + articles) - path: /api/articles/search-all?q=...
+router.get('/search-all', (req, res) => {
+  const q = req.query.q || '';
+  const limit = Math.min(parseInt(req.query.limit || '20', 10), 100);
+  const offset = Math.max(0, parseInt(req.query.offset || '0', 10));
+
+  const { total, results } = db.searchAll(q, { limit, offset });
+  res.json({ q, total, limit, offset, results });
+});
+
 // Get by slug
 router.get('/:slug', (req, res) => {
   const row = db.getArticle(req.params.slug);
   if (!row) return res.status(404).json({ error: 'Not found' });
   res.json(row);
+});
+
+// Get version history for an article
+router.get('/:slug/versions', (req, res) => {
+  const article = db.getArticle(req.params.slug);
+  if (!article) return res.status(404).json({ error: 'Article not found' });
+  const versions = db.getArticleVersions(article.id);
+  res.json(versions);
+});
+
+// Get specific version content
+router.get('/:slug/versions/:versionId', (req, res) => {
+  const article = db.getArticle(req.params.slug);
+  if (!article) return res.status(404).json({ error: 'Article not found' });
+  const versionId = parseInt(req.params.versionId, 10);
+  const versions = db.getArticleVersions(article.id);
+  const version = versions.find(v => v.id === versionId);
+  if (!version) return res.status(404).json({ error: 'Version not found' });
+  res.json(version);
+});
+
+// Restore article to a specific version
+router.post('/:slug/restore', (req, res) => {
+  const { versionId } = req.body || {};
+  if (!versionId) return res.status(400).json({ error: 'versionId required' });
+  const restored = db.restoreArticleVersion(req.params.slug, parseInt(versionId, 10));
+  if (!restored) return res.status(404).json({ error: 'Article or version not found' });
+  res.json(restored);
 });
 
 

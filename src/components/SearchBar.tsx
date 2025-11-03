@@ -1,6 +1,6 @@
-import React, { useState, useEffect, useMemo } from 'react'
+import React, { useState, useEffect } from 'react'
 import { Autocomplete, TextField, CircularProgress, Box, ListItem, Typography } from '@mui/material'
-import { useNavigate } from 'react-router-dom'
+import { Folder as FolderIcon, Article as ArticleIcon } from '@mui/icons-material'
 import * as api from '../api'
 
 interface SearchBarProps {
@@ -11,9 +11,8 @@ export default function SearchBar({ onSelect }: SearchBarProps) {
   const [q, setQ] = useState('')
   const [options, setOptions] = useState<any[]>([])
   const [loading, setLoading] = useState(false)
-  const navigate = useNavigate()
 
-  // debounce
+  // debounce search
   useEffect(() => {
     if (!q || q.length < 2) {
       setOptions([])
@@ -23,8 +22,8 @@ export default function SearchBar({ onSelect }: SearchBarProps) {
     setLoading(true)
     const t = setTimeout(async () => {
       try {
-        // No space param: search across all spaces
-        const res = await api.articles.search(q, { limit: 25 })
+        // Use unified search for spaces + articles
+        const res = await api.articles.searchAll(q, { limit: 25 })
         if (!cancelled) {
           setOptions(res.results || [])
         }
@@ -42,12 +41,18 @@ export default function SearchBar({ onSelect }: SearchBarProps) {
     <Autocomplete
       freeSolo
       options={options}
-      getOptionLabel={(o: any) => o.title || o.slug || ''}
+      getOptionLabel={(o: any) => {
+        if (o.type === 'space') return o.name || ''
+        return o.title || o.slug || ''
+      }}
       onChange={(_, value) => {
-        if (value && value.slug) {
-          // Let parent handle space switching if provided
+        if (value && typeof value === 'object') {
           if (onSelect) onSelect(value)
-          else navigate(`/a/${value.slug}`)
+          // Clear input after selection to show placeholder
+          setQ('')
+          setOptions([])
+          // ensure Autocomplete internal state resets; run after tick
+          setTimeout(() => setQ(''), 0)
         }
       }}
       filterOptions={(x) => x} // we rely on server
@@ -57,9 +62,9 @@ export default function SearchBar({ onSelect }: SearchBarProps) {
       renderInput={(params) => (
         <TextField
           {...params}
-          placeholder="Search..."
+          placeholder="Search pages or spaces"
           size="small"
-          aria-label="Search articles"
+          aria-label="Search pages or spaces"
           sx={{
             // ensure high contrast input regardless of appbar color / theme
             '& .MuiInputBase-root': (theme) => ({
@@ -84,14 +89,31 @@ export default function SearchBar({ onSelect }: SearchBarProps) {
           }}
         />
       )}
-      renderOption={(props, option: any) => (
-        <ListItem {...props} key={option.slug} sx={{ alignItems: 'flex-start' }}>
-          <Box>
-            <Typography variant="body2"><strong>{option.title}</strong></Typography>
-            <Typography variant="caption" color="text.secondary">{option.excerpt}</Typography>
-          </Box>
-        </ListItem>
-      )}
+      renderOption={(props, option: any) => {
+        const { key, ...restProps } = props as any
+        if (option.type === 'space') {
+          return (
+            <ListItem {...restProps} key={key || option.slug} sx={{ alignItems: 'center', gap: 1 }}>
+              <FolderIcon fontSize="small" color="primary" />
+              <Box>
+                <Typography variant="body2"><strong>{option.name}</strong></Typography>
+                <Typography variant="caption" color="text.secondary">Space</Typography>
+              </Box>
+            </ListItem>
+          )
+        }
+        return (
+          <ListItem {...restProps} key={key || option.slug} sx={{ alignItems: 'flex-start', gap: 1 }}>
+            <ArticleIcon fontSize="small" sx={{ mt: 0.5 }} />
+            <Box>
+              <Typography variant="body2"><strong>{option.title}</strong></Typography>
+              {option.excerpt && (
+                <Typography variant="caption" color="text.secondary">{option.excerpt}</Typography>
+              )}
+            </Box>
+          </ListItem>
+        )
+      }}
     />
   )
 }

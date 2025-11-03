@@ -118,7 +118,7 @@ export default function Editor({ onSave, currentSpaceId, article: _article }: Ed
 
   return (
     <Box sx={{ width: '100%', height: '100%' }}>
-      <Breadcrumbs sx={{ mb: 2, px: 3, pt: 3 }}>
+      <Breadcrumbs sx={{ mb: 2, px: 3, pt: 3, mt: 3 }}>
         <Link to="/" style={{ textDecoration: 'none', color: 'inherit' }}>
           Home
         </Link>
@@ -134,6 +134,12 @@ export default function Editor({ onSave, currentSpaceId, article: _article }: Ed
           variant="outlined"
           value={title}
           onChange={e => setTitle(e.target.value)}
+          onKeyDown={e => {
+            if (e.key === 'Enter' && title.trim()) {
+              e.preventDefault();
+              save();
+            }
+          }}
           sx={{ mb: 2 }}
         />
 
@@ -230,6 +236,12 @@ export default function Editor({ onSave, currentSpaceId, article: _article }: Ed
         open={confirmOpen}
         onClose={closeConfirm}
         aria-labelledby="discard-dialog-title"
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') {
+            e.preventDefault();
+            confirmCancel();
+          }
+        }}
       >
         <DialogTitle id="discard-dialog-title">Discard changes?</DialogTitle>
         <DialogContent>

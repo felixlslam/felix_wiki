@@ -14,8 +14,6 @@ import {
 import {
   ExpandMore as ExpandMoreIcon,
   ChevronRight as ChevronRightIcon,
-  Article as ArticleIcon,
-  Folder as FolderIcon,
   Add as AddIcon
 } from '@mui/icons-material'
 
@@ -83,6 +81,7 @@ function TreeNodeComponent({ node, level = 0, onNewSubpage, expanded = true, onT
         dense
         sx={{
           py: 0.25,
+          pl: 0.5,
           color: isActive ? 'primary.main' : 'text.primary',
           '&:hover': {
             bgcolor: 'action.hover',
@@ -90,34 +89,11 @@ function TreeNodeComponent({ node, level = 0, onNewSubpage, expanded = true, onT
           },
         }}
       >
-        {/* Spacer for indentation - pushes all content (icons + text) to the right */}
-        <Box sx={(theme) => ({ width: theme.spacing(level * 3), flexShrink: 0 })} />
+        {/* Spacer for indentation - reduced spacing for better horizontal space usage */}
+        <Box sx={(theme) => ({ width: theme.spacing(level * 2), flexShrink: 0 })} />
         
-        {node.slug && (
-          <IconButton
-            size="small"
-            className="add-subpage"
-            onClick={(e) => {
-              e.preventDefault()
-              e.stopPropagation()
-              onNewSubpage?.(node.slug!)
-            }}
-            sx={{ 
-              opacity: 0,
-              transition: 'opacity 0.2s',
-              mr: 0.5,
-              p: 0,
-              width: 20,
-              height: 20,
-              '& svg': { fontSize: '0.8rem' }
-            }}
-            title="Add subpage"
-          >
-            <AddIcon />
-          </IconButton>
-        )}
         {hasChildren && (
-          <ListItemIcon sx={{ minWidth: 28 }}>
+          <ListItemIcon sx={{ minWidth: 24 }}>
             <IconButton
               size="small"
               onClick={() => onToggle?.(node.slug)}
@@ -134,11 +110,10 @@ function TreeNodeComponent({ node, level = 0, onNewSubpage, expanded = true, onT
             </IconButton>
           </ListItemIcon>
         )}
+        {!hasChildren && (
+          <Box sx={{ width: 24, flexShrink: 0 }} />
+        )}
         
-        <ListItemIcon sx={{ minWidth: 28 }}>
-          {node.slug ? <ArticleIcon sx={{ fontSize: '1.1rem' }} /> : <FolderIcon sx={{ fontSize: '1.1rem' }} />}
-        </ListItemIcon>
-
         <ListItemText
           primary={
             node.slug ? (
@@ -155,7 +130,31 @@ function TreeNodeComponent({ node, level = 0, onNewSubpage, expanded = true, onT
               <Typography variant="body2">{node.name}</Typography>
             )
           }
+          sx={{ my: 0 }}
         />
+        
+        {node.slug && (
+          <IconButton
+            size="small"
+            className="add-subpage"
+            onClick={(e) => {
+              e.preventDefault()
+              e.stopPropagation()
+              onNewSubpage?.(node.slug!)
+            }}
+            sx={{ 
+              opacity: 0,
+              transition: 'opacity 0.2s',
+              p: 0,
+              width: 20,
+              height: 20,
+              '& svg': { fontSize: '0.8rem' }
+            }}
+            title="Add subpage"
+          >
+            <AddIcon />
+          </IconButton>
+        )}
       </ListItem>
       
       {hasChildren && thisExpanded && (
@@ -222,29 +221,40 @@ export default function PageTree({ articles, onNewSubpage }: PageTreeProps) {
     })
   }
 
+  if (articles.length === 0) {
+    return (
+      <Box sx={{ py: 4, px: 2, textAlign: 'center' }}>
+        <Typography variant="body2" color="text.secondary">
+          No pages yet
+        </Typography>
+        <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1 }}>
+          Create your first page to get started
+        </Typography>
+      </Box>
+    )
+  }
+
   return (
     <nav className="nav-tree">
-      <Paper elevation={1} sx={{ bgcolor: 'background.paper', borderRadius: 2, p: 1, border: '1px solid', borderColor: 'divider', boxShadow: (theme) => theme.shadows[1] }}>
-        <List disablePadding>
-          {Object.entries(tree.children)
-            .sort(([,a], [,b]) => a.name.localeCompare(b.name))
-            .map(([key, node]) => (
-              <TreeNodeComponent
-                key={key}
-                node={node}
-                onNewSubpage={onNewSubpage}
-                expanded={node.slug ? expandedSlugs.has(node.slug) : true}
-                onToggle={handleToggle}
-                isExpanded={(slug) => slug ? expandedSlugs.has(slug) : true}
-                getNodeRef={(slug, el) => {
-                  if (!slug) return
-                  if (el) nodeRefs.current.set(slug, el)
-                  else nodeRefs.current.delete(slug)
-                }}
-              />
-            ))}
-        </List>
-      </Paper>
+      <List disablePadding>
+        {Object.entries(tree.children)
+          .sort(([,a], [,b]) => a.name.localeCompare(b.name))
+          .map(([key, node]) => (
+            <TreeNodeComponent
+              key={key}
+              node={node}
+              onNewSubpage={onNewSubpage}
+              expanded={node.slug ? expandedSlugs.has(node.slug) : true}
+              onToggle={handleToggle}
+              isExpanded={(slug) => slug ? expandedSlugs.has(slug) : true}
+              getNodeRef={(slug, el) => {
+                if (!slug) return
+                if (el) nodeRefs.current.set(slug, el)
+                else nodeRefs.current.delete(slug)
+              }}
+            />
+          ))}
+      </List>
     </nav>
   )
 }

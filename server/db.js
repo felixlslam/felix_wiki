@@ -10,8 +10,9 @@ function readDB() {
     const init = { 
       articles: [],
       spaces: [
-        { id: 1, slug: 'default', name: 'Default Space', createdAt: new Date().toISOString() }
-      ]
+        { id: 1, slug: 'default', name: 'Default Space', createdAt: new Date().toISOString(), homePageSlug: null }
+      ],
+      articleVersions: []
     };
     fs.writeFileSync(DB_PATH, JSON.stringify(init, null, 2));
     return init;
@@ -21,9 +22,14 @@ function readDB() {
     // Normalize existing DBs: ensure spaces and spaceId on articles
     if (!db.spaces || !Array.isArray(db.spaces) || db.spaces.length === 0) {
       db.spaces = [
-        { id: 1, slug: 'default', name: 'Default Space', createdAt: new Date().toISOString() }
+        { id: 1, slug: 'default', name: 'Default Space', createdAt: new Date().toISOString(), homePageSlug: null }
       ];
     }
+    // Add homePageSlug to spaces that don't have it
+    db.spaces = db.spaces.map(s => ({
+      ...s,
+      homePageSlug: s.homePageSlug || null
+    }));
     if (Array.isArray(db.articles)) {
       db.articles = db.articles.map(a => ({
         ...a,
@@ -32,14 +38,19 @@ function readDB() {
     } else {
       db.articles = [];
     }
+    // Initialize articleVersions if missing
+    if (!Array.isArray(db.articleVersions)) {
+      db.articleVersions = [];
+    }
     return db;
   } catch (err) {
     console.error('Failed reading DB, reinitializing', err);
     const init = { 
       articles: [],
       spaces: [
-        { id: 1, slug: 'default', name: 'Default Space', createdAt: new Date().toISOString() }
-      ]
+        { id: 1, slug: 'default', name: 'Default Space', createdAt: new Date().toISOString(), homePageSlug: null }
+      ],
+      articleVersions: []
     };
     fs.writeFileSync(DB_PATH, JSON.stringify(init, null, 2));
     return init;
@@ -66,9 +77,22 @@ module.exports = {
       parentSlug,
       spaceId: spaceId || 1,
       createdAt, 
-      updatedAt 
+      updatedAt,
+      currentVersion: 1
     };
     db.articles.push(article);
+    
+    // Create initial version (v1)
+    const versionId = db.articleVersions.length ? (Math.max(...db.articleVersions.map(v=>v.id)) + 1) : 1;
+    db.articleVersions.push({
+      id: versionId,
+      articleId: article.id,
+      version: 1,
+      title,
+      bodyMarkdown: bodyMarkdown || '',
+      createdAt: createdAt || new Date().toISOString()
+    });
+    
     writeDB(db);
     return article;
   },
@@ -76,10 +100,28 @@ module.exports = {
     const db = readDB();
     const idx = db.articles.findIndex(a => a.slug === slug);
     if (idx === -1) return null;
+    
+    const article = db.articles[idx];
+    const newVersion = (article.currentVersion || 1) + 1;
+    
+    // Update article with new content
     db.articles[idx].title = title ?? db.articles[idx].title;
     db.articles[idx].bodyMarkdown = bodyMarkdown ?? db.articles[idx].bodyMarkdown;
     if (parentSlug !== undefined) db.articles[idx].parentSlug = parentSlug;
     db.articles[idx].updatedAt = new Date().toISOString();
+    db.articles[idx].currentVersion = newVersion;
+    
+    // Create new version entry
+    const versionId = db.articleVersions.length ? (Math.max(...db.articleVersions.map(v=>v.id)) + 1) : 1;
+    db.articleVersions.push({
+      id: versionId,
+      articleId: article.id,
+      version: newVersion,
+      title: db.articles[idx].title,
+      bodyMarkdown: db.articles[idx].bodyMarkdown,
+      createdAt: new Date().toISOString()
+    });
+    
     writeDB(db);
     return db.articles[idx];
   },
@@ -152,6 +194,54 @@ module.exports = {
     return { total, results };
   },
 
+  // Unified search (spaces + articles)
+  searchAll(q, opts = {}) {
+    const { limit = 20, offset = 0 } = opts || {};
+    if (!q || !String(q).trim()) return { total: 0, results: [] };
+    const db = readDB();
+    const nq = String(q).toLowerCase();
+
+    const spaceResults = [];
+    const articleResults = [];
+
+    // Search spaces
+    db.spaces.forEach(space => {
+      const name = (space.name || '').toLowerCase();
+      if (name.includes(nq)) {
+        const nameIdx = name.indexOf(nq);
+        spaceResults.push({
+          type: 'space',
+          id: space.id,
+          slug: space.slug,
+          name: space.name,
+          score: 300 - nameIdx, // Spaces get higher base score
+        });
+      }
+    });
+
+    // Search articles
+    const articleSearch = this.searchArticles(q, { limit: 100 });
+    articleSearch.results.forEach(article => {
+      articleResults.push({
+        type: 'article',
+        ...article,
+      });
+    });
+
+    // Combine and sort
+    const allResults = [...spaceResults, ...articleResults];
+    allResults.sort((a, b) => {
+      // Spaces always first if both match
+      if (a.type === 'space' && b.type === 'article') return -1;
+      if (a.type === 'article' && b.type === 'space') return 1;
+      return b.score - a.score;
+    });
+
+    const total = allResults.length;
+    const results = allResults.slice(offset, offset + limit);
+    return { total, results };
+  },
+
   // Space management
   listSpaces() {
     const db = readDB();
@@ -170,6 +260,7 @@ module.exports = {
       id,
       slug,
       name,
+      homePageSlug: null,
       createdAt: new Date().toISOString()
     };
     db.spaces.push(space);
@@ -177,24 +268,28 @@ module.exports = {
     return space;
   },
 
-  updateSpace(slug, { name }) {
+  updateSpace(slug, { name, homePageSlug }) {
     const db = readDB();
     const idx = db.spaces.findIndex(s => s.slug === slug);
     if (idx === -1) return null;
-    db.spaces[idx].name = name;
+    if (name !== undefined) db.spaces[idx].name = name;
+    if (homePageSlug !== undefined) db.spaces[idx].homePageSlug = homePageSlug;
     writeDB(db);
     return db.spaces[idx];
   },
 
   deleteSpace(slug) {
     const db = readDB();
-    if (slug === 'default') return false; // Prevent default space deletion
     const space = db.spaces.find(s => s.slug === slug);
     if (!space) return false;
     const before = db.spaces.length;
     db.spaces = db.spaces.filter(s => s.slug !== slug);
-    // Move articles to default space (id 1)
-    db.articles = db.articles.map(a => (a.spaceId === space.id ? { ...a, spaceId: 1 } : a));
+    // Remove all articles that belonged to the deleted space.
+    // Deleting a space permanently removes its pages to avoid silently mixing content into other spaces.
+    const deletedArticleIds = db.articles.filter(a => a.spaceId === space.id).map(a => a.id);
+    db.articles = db.articles.filter(a => a.spaceId !== space.id);
+    // Also delete all versions of deleted articles
+    db.articleVersions = db.articleVersions.filter(v => !deletedArticleIds.includes(v.articleId));
     writeDB(db);
     return db.spaces.length !== before;
   },
@@ -206,5 +301,51 @@ module.exports = {
       ? db.articles.filter(a => a.spaceId === spaceId)
       : db.articles;
     return articles.slice().sort((a,b) => (a.updatedAt < b.updatedAt ? 1 : -1));
+  },
+
+  // Article version management
+  getArticleVersions(articleId) {
+    const db = readDB();
+    return db.articleVersions
+      .filter(v => v.articleId === articleId)
+      .sort((a, b) => b.version - a.version); // Most recent first
+  },
+
+  getArticleVersion(articleId, version) {
+    const db = readDB();
+    return db.articleVersions.find(v => v.articleId === articleId && v.version === version) || null;
+  },
+
+  restoreArticleVersion(slug, versionId) {
+    const db = readDB();
+    const article = db.articles.find(a => a.slug === slug);
+    if (!article) return null;
+
+    const version = db.articleVersions.find(v => v.id === versionId && v.articleId === article.id);
+    if (!version) return null;
+
+    // Create a new version with the restored content
+    const newVersion = (article.currentVersion || 1) + 1;
+    const idx = db.articles.findIndex(a => a.id === article.id);
+    
+    db.articles[idx].title = version.title;
+    db.articles[idx].bodyMarkdown = version.bodyMarkdown;
+    db.articles[idx].updatedAt = new Date().toISOString();
+    db.articles[idx].currentVersion = newVersion;
+
+    // Create new version entry (restoration creates a new version)
+    const newVersionId = db.articleVersions.length ? (Math.max(...db.articleVersions.map(v=>v.id)) + 1) : 1;
+    db.articleVersions.push({
+      id: newVersionId,
+      articleId: article.id,
+      version: newVersion,
+      title: version.title,
+      bodyMarkdown: version.bodyMarkdown,
+      createdAt: new Date().toISOString(),
+      restoredFrom: version.version
+    });
+
+    writeDB(db);
+    return db.articles[idx];
   }
 }
